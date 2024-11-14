@@ -44,7 +44,7 @@ class LSTMAutoencoder(nn.Module):
         
         # Encode
         _, (hidden, _) = self.encoder_lstm(x)
-        latent = self.hidden_to_latent(hidden[-1])  # 마지막 LSTM 층의 hidden state 사용
+        latent = self.hidden_to_latent(hidden[-1]) 
 
         # Decode
         decoder_hidden = self.latent_to_hidden(latent).unsqueeze(0).expand(self.decoder_lstm.num_layers, batch_size, -1).contiguous()
@@ -53,6 +53,7 @@ class LSTMAutoencoder(nn.Module):
         decoder_output, _ = self.decoder_lstm(decoder_input, (decoder_hidden, torch.zeros_like(decoder_hidden)))
         x_reconstructed = self.output_layer(decoder_output)
         return x_reconstructed
+        
 # GRU Autoencoder 
 class GRUAutoencoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim, num_layers):
@@ -91,7 +92,7 @@ class CNNAutoencoder(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(sequence_length * 256, latent_dim),
-            nn.Dropout(0.4)  # Dropout을 조금 더 증가
+            nn.Dropout(0.4)  
         )
         
         # Decoder: ConvTranspose1D layers with mirrored structure
@@ -115,7 +116,6 @@ class CNNAutoencoder(nn.Module):
         x_reconstructed = x_reconstructed.permute(0, 2, 1)  
         return x_reconstructed
 
-# 모델 설정
 input_dim = 51
 hidden_dim = 64
 latent_dim = 16
@@ -123,13 +123,11 @@ num_layers = 2
 sequence_length = 5
 threshold = 0.025
 
-# 각 모델 인스턴스 생성 및 모델 리스트
 lstm_model = LSTMAutoencoder(input_dim=input_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, num_layers=num_layers)
 gru_model = GRUAutoencoder(input_dim=input_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, num_layers=num_layers)
 cnn_model = CNNAutoencoder(input_dim=input_dim, sequence_length=sequence_length, latent_dim=latent_dim)
 models = [lstm_model.to(device), gru_model.to(device), cnn_model.to(device)]
 
-# 데이터 로드 및 시퀀스 생성
 def load_and_preprocess_data(data_path, sequence_length):
     data = pd.read_csv(data_path)
     data.interpolate(method='linear', limit_direction='both', inplace=True)
@@ -144,7 +142,6 @@ def load_and_preprocess_data(data_path, sequence_length):
     
     return create_sequences(scaled_data, sequence_length)
 
-# 모델 학습 함수
 def train_model(model, train_data, epochs=30, learning_rate=0.001):
     if model == lstm_model:
         epochs = 40
@@ -162,17 +159,15 @@ def train_model(model, train_data, epochs=30, learning_rate=0.001):
         optimizer.step()
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.6f}")
 
-# 학습 및 이상 탐지
 def train_and_detect_anomalies(models, data, threshold):
     data_tensor = torch.tensor(data, dtype=torch.float32).to(device)
     votes = np.zeros(len(data), dtype=int)
     reconstruction_errors = []
     model_anomaly_counts = {}
     
-    # 각 모델을 학습 후 이상 탐지
     for model in models:
         model_name = model.__class__.__name__
-        train_model(model, data_tensor)  # 모델 학습
+        train_model(model, data_tensor)  
         model.eval()
         
         with torch.no_grad():
@@ -180,57 +175,13 @@ def train_and_detect_anomalies(models, data, threshold):
             reconstruction_error = torch.mean((predictions - data_tensor)**2, dim=[1, 2])
             reconstruction_errors.append(reconstruction_error.cpu().numpy())
             
-            # 이상치로 판별된 데이터 수 계산
             anomaly_count = np.sum(reconstruction_error.cpu().numpy() > threshold)
             model_anomaly_counts[model_name] = anomaly_count
             
-            # 임계값 기준으로 정상 데이터에 투표
             votes += (reconstruction_error <= threshold).cpu().numpy().astype(int)
-    
-    # 모델별 이상치 수 출력
     for model_name, count in model_anomaly_counts.items():
         print(f"{model_name} 모델의 이상치 개수: {count}")
     
-    # 보팅 기반 정상/이상 탐지
-    majority_vote_threshold = len(models) // 2 + 1
-    is_normal = votes >= majority_vote_threshold
-    normal_data = data[is_normal]
-    
-    print(f"Normal data count (majority voting): {np.sum(is_normal)}")
-    print(f"Anomaly data count (majority voting): {len(is_normal) - np.sum(is_normal)}")
-    
-    return normal_data
-
-# 학습 및 이상 탐지
-def train_and_detect_anomalies(models, data, threshold):
-    data_tensor = torch.tensor(data, dtype=torch.float32).to(device)
-    votes = np.zeros(len(data), dtype=int)
-    reconstruction_errors = []
-    model_anomaly_counts = {}
-    
-    # 각 모델을 학습 후 이상 탐지
-    for model in models:
-        model_name = model.__class__.__name__
-        train_model(model, data_tensor)  # 모델 학습
-        model.eval()
-        
-        with torch.no_grad():
-            predictions = model(data_tensor)
-            reconstruction_error = torch.mean((predictions - data_tensor)**2, dim=[1, 2])
-            reconstruction_errors.append(reconstruction_error.cpu().numpy())
-            
-            # 이상치로 판별된 데이터 수 계산
-            anomaly_count = np.sum(reconstruction_error.cpu().numpy() > threshold)
-            model_anomaly_counts[model_name] = anomaly_count
-            
-            # 임계값 기준으로 정상 데이터에 투표
-            votes += (reconstruction_error <= threshold).cpu().numpy().astype(int)
-    
-    # 모델별 이상치 수 출력
-    for model_name, count in model_anomaly_counts.items():
-        print(f"{model_name} 모델의 이상치 개수: {count}")
-    
-    # 보팅 기반 정상/이상 탐지
     majority_vote_threshold = len(models) // 2 + 1
     is_normal = votes >= majority_vote_threshold
     
@@ -239,12 +190,8 @@ def train_and_detect_anomalies(models, data, threshold):
     
     return is_normal
 
-# 이상 데이터 라벨링
 def label_data_as_anomalies(timestamps, is_normal, sequence_length):
-    # 시퀀스의 첫 번째 타임스탬프만 사용하여 라벨 생성
     anomaly_labels = np.where(is_normal, 0, 1).astype(int)
-    
-    # 라벨의 길이를 원래 데이터와 동일하게 맞추기 위해 padding 추가
     anomaly_labels_full = np.concatenate([np.zeros(sequence_length - 1), anomaly_labels]).astype(int)
     anomaly_labels_full = anomaly_labels_full[:len(timestamps)]  # 길이 맞추기
     
@@ -253,12 +200,10 @@ def label_data_as_anomalies(timestamps, is_normal, sequence_length):
         "Anomaly": anomaly_labels_full
     })
 
-# 정상 데이터 추출
 data_path = ""
 data = load_and_preprocess_data(data_path, sequence_length)
 is_normal = train_and_detect_anomalies(models, data, threshold)
 
-# Timestamp 불러와서 이상치 1, 정상 0으로 라벨링
 timestamps = pd.read_csv(data_path)["Timestamp"]
 output_df = label_data_as_anomalies(timestamps, is_normal, sequence_length)
 output_df.to_csv("labeled_output.csv", index=False)
