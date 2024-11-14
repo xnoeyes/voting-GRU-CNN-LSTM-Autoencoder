@@ -6,7 +6,6 @@ from sklearn.preprocessing import MinMaxScaler
 import torch.nn as nn
 import torch.optim as optim
 
-# 시드 고정 설정
 seed = 42
 torch.manual_seed(seed)
 np.random.seed(seed)
@@ -14,16 +13,15 @@ random.seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
-# CUDA 설정
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# LSTM Autoencoder 모델 정의
+# LSTM Autoencoder 
 class LSTMAutoencoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim, num_layers, dropout=0.3):
         super(LSTMAutoencoder, self).__init__()
         
-        # 단방향 LSTM Encoder
+        # LSTM Encoder
         self.encoder_lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=dropout)
         self.hidden_to_latent = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim * 2),
@@ -37,7 +35,7 @@ class LSTMAutoencoder(nn.Module):
             nn.ReLU()
         )
         
-        # 단방향 LSTM Decoder
+        # LSTM Decoder
         self.decoder_lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, batch_first=True, dropout=dropout)
         self.output_layer = nn.Linear(hidden_dim, input_dim)
 
@@ -52,15 +50,10 @@ class LSTMAutoencoder(nn.Module):
         decoder_hidden = self.latent_to_hidden(latent).unsqueeze(0).expand(self.decoder_lstm.num_layers, batch_size, -1).contiguous()
         decoder_input = torch.zeros((batch_size, sequence_length, hidden_dim)).to(x.device)
         
-        # 단방향 LSTM을 사용한 Decoder 실행
         decoder_output, _ = self.decoder_lstm(decoder_input, (decoder_hidden, torch.zeros_like(decoder_hidden)))
-        
-        # 최종 재구성 단계
         x_reconstructed = self.output_layer(decoder_output)
-        
         return x_reconstructed
-
-
+# GRU Autoencoder 
 class GRUAutoencoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim, num_layers):
         super(GRUAutoencoder, self).__init__()
@@ -80,7 +73,7 @@ class GRUAutoencoder(nn.Module):
         
         return x_reconstructed
 
-# CNN Autoencoder 모델 정의
+# CNN Autoencoder 
 class CNNAutoencoder(nn.Module):
     def __init__(self, input_dim, sequence_length, latent_dim):
         super(CNNAutoencoder, self).__init__()
@@ -112,14 +105,14 @@ class CNNAutoencoder(nn.Module):
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.ConvTranspose1d(64, input_dim, kernel_size=3, stride=1, padding=1),
-            nn.Tanh()  # Tanh 활성화 함수로 변경하여 -1에서 1로 제한
+            nn.Tanh()  
         )
         
     def forward(self, x):
-        x = x.permute(0, 2, 1)  # (batch, sequence_length, input_dim) -> (batch, input_dim, sequence_length)
+        x = x.permute(0, 2, 1)  
         latent = self.encoder(x)
         x_reconstructed = self.decoder(latent)
-        x_reconstructed = x_reconstructed.permute(0, 2, 1)  # 원래 형식으로 변환
+        x_reconstructed = x_reconstructed.permute(0, 2, 1)  
         return x_reconstructed
 
 # 모델 설정
@@ -260,8 +253,8 @@ def label_data_as_anomalies(timestamps, is_normal, sequence_length):
         "Anomaly": anomaly_labels_full
     })
 
-# 정상 데이터만 추출
-data_path = "C:/Users/이세연/Downloads/reconstructed_con_sig_2.csv"
+# 정상 데이터 추출
+data_path = ""
 data = load_and_preprocess_data(data_path, sequence_length)
 is_normal = train_and_detect_anomalies(models, data, threshold)
 
